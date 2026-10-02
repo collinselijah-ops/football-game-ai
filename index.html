@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football Drive AI</title>
+  <style>
+    :root {
+      --bg: #0e1726;
+      --panel: #112131;
+      --green: #2e8b57;
+      --green-dark: #1d5f39;
+      --yard: #2c9d5b;
+      --line: rgba(255,255,255,0.7);
+      --offense: #2f7ae5;
+      --defense: #ef4d4d;
+      --ball: #ffd54a;
+      --text: #eef7ff;
+      --muted: #a8bfd3;
+      --shadow: rgba(0,0,0,0.25);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: radial-gradient(circle at top, #182c49, var(--bg) 62%);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 18px;
+    }
+
+    .game {
+      width: min(1180px, 96vw);
+      background: rgba(17, 33, 49, 0.9);
+      border: 2px solid rgba(255,255,255,0.09);
+      border-radius: 18px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.35);
+      overflow: hidden;
+    }
+
+    .hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(19, 28, 36, 0.8);
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .scorebox {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .teamscore {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 8px 12px;
+      min-width: 170px;
+    }
+
+    .teamscore .label {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    .teamscore .value {
+      font-weight: 700;
+      font-size: 28px;
+    }
+
+    .downs {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 8px 12px;
+    }
+
+    .down-pill {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-weight: 700;
+      min-width: 58px;
+      text-align: center;
+    }
+
+    .status {
+      font-size: 14px;
+      color: var(--muted);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 8px 12px;
+    }
+
+    .field-wrap {
+      position: relative;
+      padding: 14px 18px 10px;
+    }
+
+    canvas {
+      width: 100%;
+      display: block;
+      background: linear-gradient(to bottom, #478d5a, #2a6f45 45%, #2d7c49 100%);
+      border-radius: 14px;
+      border: 2px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.18);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 10px;
+      padding: 16px 18px 18px;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(180deg, #2d7cf0, #1f5ec9);
+      color: white;
+      font-weight: 700;
+      font-size: 14px;
+      border-radius: 10px;
+      min-height: 46px;
+      box-shadow: 0 8px 20px rgba(24, 72, 160, 0.28);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(24, 72, 160, 0.32);
+    }
+
+    button.secondary {
+      background: linear-gradient(180deg, #f0b136, #d28a10);
+    }
+
+    button.warning {
+      background: linear-gradient(180deg, #eb4c4c, #bc2d2d);
+    }
+
+    .log {
+      margin: 0 18px 18px;
+      background: rgba(10, 16, 22, 0.5);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 14px;
+      color: #dfeef9;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 800px) {
+      .controls {
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
+      }
+      .teamscore .value {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="game">
+    <div class="hud">
+      <div class="scorebox">
+        <div class="teamscore">
+          <span class="label">Home</span>
+          <span class="value" id="homeScore">0</span>
+        </div>
+        <div class="teamscore">
+          <span class="label">Away</span>
+          <span class="value" id="awayScore">0</span>
+        </div>
+      </div>
+
+      <div class="downs">
+        <div class="down-pill" id="downDisplay">1st</div>
+        <div class="down-pill" id="distanceDisplay">10</div>
+        <div class="status" id="ballLocation">Ball on own 25</div>
+      </div>
+
+      <div class="status" id="quarterDisplay">Q1</div>
+    </div>
+
+    <div class="field-wrap">
+      <canvas id="field" width="1100" height="520"></canvas>
+    </div>
+
+    <div class="controls">
+      <button class="secondary" data-play="Power Run">Power Run</button>
+      <button data-play="Inside Run">Inside Run</button>
+      <button data-play="Slant Pass">Slant Pass</button>
+      <button data-play="Post Pass">Post Pass</button>
+      <button class="warning" data-play="Screen Pass">Screen Pass</button>
+    </div>
+
+    <div class="log" id="log">
+      Drive started. Choose a play.
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("field");
+    const ctx = canvas.getContext("2d");
+    const homeScoreEl = document.getElementById("homeScore");
+    const awayScoreEl = document.getElementById("awayScore");
+    const downDisplay = document.getElementById("downDisplay");
+    const distanceDisplay = document.getElementById("distanceDisplay");
+    const ballLocationEl = document.getElementById("ballLocation");
+    const quarterDisplay = document.getElementById("quarterDisplay");
+    const logEl = document.getElementById("log");
+
+    const state = {
+      homeScore: 0,
+      awayScore: 0,
+      quarter: 1,
+      down: 1,
+      distance: 10,
+      yardLine: 25,
+      possession: "home",
+      lastPlay: null,
+      driveStarted: false
+    };
+
+    const plays = {
+      "Power Run": {
+        name: "Power Run",
+        kind: "run",
+        gainMin: 3,
+        gainMax: 9,
+        risk: 0.18,
+        description: "Fullback leads, RB hits the gap."
+      },
+      "Inside Run": {
+        name: "Inside Run",
+        kind: "run",
+        gainMin: 2,
+        gainMax: 7,
+        risk: 0.12,
+        description: "RB follows the center, downhill through the middle."
+      },
+      "Slant Pass": {
+        name: "Slant Pass",
+        kind: "pass",
+        gainMin: 5,
+        gainMax: 14,
+        risk: 0.17,
+        description: "Quick slant to the slot receiver."
+      },
+      "Post Pass": {
+        name: "Post Pass",
+        kind: "pass",
+        gainMin: 9,
+        gainMax: 26,
+        risk: 0.28,
+        description: "Deep route to the outside receiver."
+      },
+      "Screen Pass": {
+        name: "Screen Pass",
+        kind: "pass",
+        gainMin: 2,
+        gainMax: 11,
+        risk: 0.1,
+        description: "Quick pass to the RB behind the line."
+      }
+    };
+
+    const offense = [
+      { name: "QB", x: 220, y: 260, team: "home", color: "#2f7ae5" },
+      { name: "LT", x: 280, y: 180, team: "home", color: "#2f7ae5" },
+      { name: "LG", x: 300, y: 230, team: "home", color: "#2f7ae5" },
+      { name: "C", x: 310, y: 260, team: "home", color: "#2f7ae5" },
+      { name: "RG", x: 300, y: 290, team: "home", color: "#2f7ae5" },
+      { name: "RT", x: 280, y: 340, team: "home", color: "#2f7ae5" },
+      { name: "WR1", x: 420, y: 155, team: "home", color: "#2f7ae5" },
+      { name: "WR2", x: 440, y: 275, team: "home", color: "#2f7ae5" },
+      { name: "TE", x: 440, y: 360, team: "home", color: "#2f7ae5" },
+      { name: "RB", x: 500, y: 255, team: "home", color: "#2f7ae5" },
+      { name: "AI", x: 580, y: 205, team: "home", color: "#5ac8fa" }
+    ];
+
+    const defense = [
+      { name: "DE1", x: 720, y: 160, team: "away", color: "#ef4d4d" },
+      { name: "DT1", x: 760, y: 220, team: "away", color: "#ef4d4d" },
+      { name: "DT2", x: 760, y: 300, team: "away", color: "#ef4d4d" },
+      { name: "DE2", x: 720, y: 360, team: "away", color: "#ef4d4d" },
+      { name: "LB1", x: 820, y: 145, team: "away", color: "#ef4d4d" },
+      { name: "LB2", x: 840, y: 255, team: "away", color: "#ef4d4d" },
+      { name: "LB3", x: 820, y: 365, team: "away", color: "#ef4d4d" },
+      { name: "CB1", x: 900, y: 120, team: "away", color: "#ef4d4d" },
+      { name: "CB2", x: 900, y: 245, team: "away", color: "#ef4d4d" },
+      { name: "FS", x: 930, y: 340, team: "away", color: "#ef4d4d" },
+      { name: "SS", x: 950, y: 260, team: "away", color: "#ef4d4d" }
+    ];
+
+    const ball = {
+      x: 470,
+      y: 260,
+      active: false,
+      speed: 0,
+      targetX: 470,
+      targetY: 260
+    };
+
+    function randomRange(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function updateHud() {
+      homeScoreEl.textContent = state.homeScore;
+      awayScoreEl.textContent = state.awayScore;
+      downDisplay.textContent = getDownLabel(state.down);
+      distanceDisplay.textContent = state.distance;
+      ballLocationEl.textContent = "Ball on " + (state.possession === "home" ? "own " : "opp ") + state.yardLine;
+      quarterDisplay.textContent = "Q" + state.quarter;
+    }
+
+    function getDownLabel(d) {
+      if (d === 1) return "1st";
+      if (d === 2) return "2nd";
+      if (d === 3) return "3rd";
+      return "4th";
+    }
+
+    function setBallForPlay() {
+      const fieldStart = 80;
+      const fieldEnd = 1020;
+      const x = fieldStart + ((state.yardLine / 100) * (fieldEnd - fieldStart));
+      ball.x = x;
+      ball.y = 260;
+      ball.targetX = x;
+      ball.targetY = 260;
+      ball.active = false;
+    }
+
+    function renderField() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "#2d8d4d";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "#3e9c5a";
+      ctx.fillRect(0, 0, 90, canvas.height);
+      ctx.fillRect(canvas.width - 90, 0, 90, canvas.height);
+
+      for (let i = 0; i <= 10; i++) {
+        const x = 90 + (i * ((canvas.width - 180) / 10));
+        ctx.fillStyle = i % 2 === 0 ? "#267943" : "#2a8249";
+        ctx.fillRect(x, 0, (canvas.width - 180) / 10, canvas.height);
+      }
+
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(90, 0);
+      ctx.lineTo(90, canvas.height);
+      ctx.moveTo(canvas.width - 90, 0);
+      ctx.lineTo(canvas.width - 90, canvas.height);
+      ctx.stroke();
+
+      for (let x = 90; x <= canvas.width - 90; x += 50) {
+        ctx.beginPath();
+        ctx.moveTo(x, 10);
+        ctx.lineTo(x, 40);
+        ctx.moveTo(x, canvas.height - 10);
+        ctx.lineTo(x, canvas.height - 40);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i <= 10; i++) {
+        const x = 90 + (i * ((canvas.width - 180) / 10));
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.font = "bold 24px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(String(10 - i), x + 40, 40);
+        ctx.fillText(String(10 - i), x + 40, canvas.height - 20);
+      }
+
+      ctx.strokeStyle = "rgba(255,255,255,0.8)";
+      ctx.setLineDash([8, 10]);
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, 0);
+      ctx.lineTo(canvas.width / 2, canvas.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "#f7d75b";
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, 9, 0, Math.PI * 2);
+      ctx.fill();
+
+      const allPlayers = [...offense, ...defense];
+      allPlayers.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#0d1d2b";
+        ctx.font = "11px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(p.name, p.x, p.y + 22);
+      });
+    }
+
+    function setPlayerFormation() {
+      offense[0].x = 220; offense[0].y = 260;
+      offense[1].x = 270; offense[1].y = 180;
+      offense[2].x = 290; offense[2].y = 225;
+      offense[3].x = 300; offense[3].y = 260;
+      offense[4].x = 290; offense[4].y = 295;
+      offense[5].x = 270; offense[5].y = 340;
+      offense[6].x = 420; offense[6].y = 155;
+      offense[7].x = 440; offense[7].y = 275;
+      offense[8].x = 430; offense[8].y = 360;
+      offense[9].x = 500; offense[9].y = 255;
+      offense[10].x = 580; offense[10].y = 205;
+
+      defense[0].x = 720; defense[0].y = 150;
+      defense[1].x = 760; defense[1].y = 215;
+      defense[2].x = 760; defense[2].y = 305;
+      defense[3].x = 720; defense[3].y = 360;
+      defense[4].x = 820; defense[4].y = 145;
+      defense[5].x = 840; defense[5].y = 255;
+      defense[6].x = 820; defense[6].y = 365;
+      defense[7].x = 905; defense[7].y = 120;
+      defense[8].x = 905; defense[8].y = 245;
+      defense[9].x = 930; defense[9].y = 340;
+      defense[10].x = 960; defense[10].y = 260;
+    }
+
+    function animatePlay(playKey) {
+      const play = plays[playKey];
+      const gain = Math.round(randomRange(play.gainMin, play.gainMax));
+      const moveLeft = Math.random() > 0.5;
+
+      if (play.kind === "run") {
+        offense[9].x += moveLeft ? -40 : 40;
+        offense[9].y += randomRange(-18, 18);
+        offense[10].x += 90;
+        offense[10].y += randomRange(-20, 20);
+      } else {
+        offense[10].x += 140;
+        offense[10].y += randomRange(-30, 30);
+        offense[7].x += 120;
+        offense[7].y += randomRange(-15, 15);
+      }
+
+      defense.forEach((d, idx) => {
+        d.x -= idx % 2 === 0 ? 20 : 15;
+      });
+
+      const startX = ball.x;
+      const targetX = Math.min(1015, Math.max(90, startX + gain * 4.8));
+      const start = performance.now();
+
+      function tick(now) {
+        const p = Math.min((now - start) / 850, 1);
+        const eased = 1 - Math.pow(1 - p, 3);
+        ball.x = startX + (targetX - startX) * eased;
+        ball.y = 260 + Math.sin(p * Math.PI) * 10;
+        renderField();
+        if (p < 1) requestAnimationFrame(tick);
+        else finishTurn(play, gain);
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    function finishTurn(play, gain) {
+      let netGain = gain;
+      const badPlayRoll = Math.random();
+
+      if (play.kind === "pass" && badPlayRoll < 0.18) {
+        netGain = Math.round(randomRange(-4, 4));
+      }
+      if (play.kind === "run" && badPlayRoll < 0.12) {
+        netGain = Math.round(randomRange(-2, 3));
+      }
+
+      const newLine = Math.max(0, Math.min(100, state.yardLine + netGain));
+      state.yardLine = newLine;
+
+      if (newLine >= 100) {
+        state.homeScore += 7;
+        logEl.textContent = `${play.name}: Touchdown! Home scores 7.`;
+        state.possession = "home";
+        state.down = 1;
+        state.distance = 10;
+        state.yardLine = 25;
+        state.driveStarted = false;
+      } else if (netGain >= state.distance) {
+        state.down = 1;
+        state.distance = 10;
+        logEl.textContent = `${play.name}: ${netGain} yards. First down!`;
+      } else {
+        state.down += 1;
+        if (state.down > 4) {
+          state.possession = state.possession === "home" ? "away" : "home";
+          state.down = 1;
+          state.distance = 10;
+          state.yardLine = state.possession === "home" ? 25 : 75;
+          logEl.textContent = `Turnover on downs! ${play.name} gained ${netGain} yards, but it wasn't enough. Ball goes to the opponent.`;
+        } else {
+          state.distance = Math.max(1, state.distance - netGain);
+          logEl.textContent = `${play.name}: Gain of ${netGain}. ${getDownLabel(state.down)} & ${state.distance}.`;
+        }
+      }
+
+      updateHud();
+      setBallForPlay();
+      renderField();
+    }
+
+    function callPlay(playKey) {
+      if (!plays[playKey]) return;
+      state.driveStarted = true;
+      state.possession = "home";
+      const play = plays[playKey];
+      logEl.textContent = `Play called: ${play.name}. ${play.description}`;
+      animatePlay(playKey);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      setPlayerFormation();
+      updateHud();
+      setBallForPlay();
+      renderField();
+      document.querySelectorAll("button[data-play]").forEach(btn => {
+        btn.addEventListener("click", () => callPlay(btn.dataset.play));
+      });
+    });
+  </script>
+</body>
+</html>
